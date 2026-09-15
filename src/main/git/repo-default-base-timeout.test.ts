@@ -28,10 +28,8 @@ describe('getBaseRefDefault async subprocess bounds', () => {
     }
   })
 
-  // The deadline now also bounds the admission wait, so a saturated queue rejects every probe
-  // without spawning. Reporting that as "no default base" tells the user to pick a base on a repo
-  // that has origin/main.
-  it('fails rather than reporting no default when a probe never reached git', async () => {
+  // A timed-out probe is not evidence that a ref is missing.
+  it('fails rather than reporting no default when a probe times out', async () => {
     gitExecFileAsyncMock.mockRejectedValue(new GitCommandTimeoutError(15_000))
 
     await expect(getBaseRefDefault('/repo')).rejects.toMatchObject({

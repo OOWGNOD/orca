@@ -14,6 +14,7 @@ vi.mock('./spawned-command-tree-kill', () => ({
 
 import { gitStreamStdout } from './git-stream-stdout'
 import {
+  acquireGitAdmission,
   GitAdmissionScheduler,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
@@ -36,7 +37,10 @@ describe('git stream admission lifetime', () => {
     _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 1 }))
   })
 
-  afterEach(() => _resetGitAdmissionForTests())
+  afterEach(() => {
+    vi.useRealTimers()
+    _resetGitAdmissionForTests()
+  })
 
   it('retains the permit after maxBuffer settlement until close', async () => {
     const child = mockChild()
@@ -57,21 +61,25 @@ describe('git stream admission lifetime', () => {
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
   })
 
-  it('fails a queued stream on its own timeout without ever spawning it', async () => {
+  it('waits beyond the execution timeout before starting a stream', async () => {
+    vi.useFakeTimers()
     _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
-    const blocker = mockChild()
-    gitSpawnMock.mockReturnValue(blocker)
-    const holding = gitStreamStdout(['status'], { cwd: '/repo', onStdout: () => {} })
-    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledOnce())
-
-    await expect(
-      gitStreamStdout(['status'], { cwd: '/repo', timeoutMs: 50, onStdout: () => {} })
-    ).rejects.toMatchObject({ name: 'GitCommandTimeoutError', timeoutMs: 50 })
+    const holding = acquireGitAdmission({ args: ['status'], cwd: '/repo' })
+    await vi.advanceTimersByTimeAsync(0)
+    const blocker = await holding
+    const child = mockChild()
+    gitSpawnMock.mockReturnValue(child)
+    const pending = gitStreamStdout(['status'], { cwd: '/repo', timeoutMs: 50, onStdout: () => {} })
+    await vi.advanceTimersByTimeAsync(500)
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+    expect(_gitAdmissionSnapshotForTests().queued).toBe(1)
+    blocker.release()
+    await vi.advanceTimersByTimeAsync(0)
     expect(gitSpawnMock).toHaveBeenCalledOnce()
-    expect(_gitAdmissionSnapshotForTests().queued).toBe(0)
-
-    blocker.emit('close', 0, null)
-    await expect(holding).resolves.toEqual({ stoppedEarly: false })
+    await vi.advanceTimersByTimeAsync(49)
+    child.emit('close', 0, null)
+    await expect(pending).resolves.toEqual({ stoppedEarly: false })
+    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
   })
 
   it('retains the permit after abort settlement until close', async () => {

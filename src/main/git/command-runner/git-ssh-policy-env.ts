@@ -138,8 +138,7 @@ export async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise
     cwd: options.cwd,
     wslDistro: options.wslDistro,
     tier: options.admissionTier,
-    signal: options.signal,
-    timeoutMs: CORE_SSH_COMMAND_PROBE_TIMEOUT_MS
+    signal: options.signal
   })
   let reportTerminated: () => void = () => {}
   const terminated = new Promise<void>((resolve) => {

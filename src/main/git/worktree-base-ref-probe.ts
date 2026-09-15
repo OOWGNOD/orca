@@ -35,8 +35,7 @@ export async function resolveWorktreeBaseCommitOid(
     return oid.length > 0 ? oid : null
   } catch (error) {
     options.signal?.throwIfAborted()
-    // A probe that never reached the ref store is not evidence the ref is absent; callers that
-    // steer on `null` would otherwise turn a saturated admission queue into "no such base".
+    // A timed-out probe is not evidence that the ref is absent.
     if (error instanceof GitCommandTimeoutError) {
       throw error
     }

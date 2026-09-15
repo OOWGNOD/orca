@@ -51,8 +51,7 @@ export async function withGitAdmission(
       cwd: options.cwd,
       wslDistro: options.wslDistro,
       tier: options.admissionTier,
-      signal: options.signal,
-      timeoutMs: options.timeout
+      signal: options.signal
     })
     span.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
     if (options.signal?.aborted) {

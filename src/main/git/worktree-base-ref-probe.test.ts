@@ -98,9 +98,8 @@ describe('hasLocalWorktreeBaseRef', () => {
     )
   })
 
-  // The command timeout now bounds the admission wait too, so a queued probe rejects without
-  // spawning. Folding that into `false` steers the create into a fetch for a base it already has.
-  it('fails rather than reporting an absent base when the probe never reached git', async () => {
+  // A timed-out probe is not evidence that a ref is missing.
+  it('fails rather than reporting an absent base when the probe times out', async () => {
     gitExecFileAsync.mockRejectedValue(new GitCommandTimeoutError(120_000))
 
     await expect(hasLocalWorktreeBaseRef(repoPath, 'origin/main')).rejects.toMatchObject({

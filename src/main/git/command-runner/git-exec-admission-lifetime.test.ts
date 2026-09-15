@@ -67,9 +67,6 @@ function mockChild(pid: number | undefined = 1234): ChildProcess {
   return child as unknown as ChildProcess
 }
 
-/** `vi.waitFor` jumps the fake clock, which now also runs the admission deadline — a command with a
- *  10ms budget would time out in the queue before it ever spawned. Drain the grant's microtasks
- *  instead, leaving the clock where the test put it. */
 async function settleAdmissionGrant(): Promise<void> {
   await vi.advanceTimersByTimeAsync(0)
 }
@@ -88,31 +85,27 @@ describe('git exec admission lifetime', () => {
     _resetGitAdmissionForTests()
   })
 
-  it('bounds the SSH configuration probe before a fetch can start', async () => {
+  it('keeps the SSH policy probe queued beyond its execution budget until caller cancellation', async () => {
     _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
     const holding = acquireGitAdmission({ args: ['status'], cwd: '/repo' })
     await settleAdmissionGrant()
     const blocker = await holding
+    const controller = new AbortController()
     const pending = gitExecFileAsync(['fetch', 'origin'], {
       cwd: '/repo',
       env: { ...process.env, GIT_SSH_COMMAND: '' },
-      useConfiguredSshCommandForNetwork: true
+      useConfiguredSshCommandForNetwork: true,
+      signal: controller.signal
     })
-    const rejection = expect(pending).rejects.toMatchObject({
-      name: 'GitCommandTimeoutError',
-      timeoutMs: 2500
-    })
-    try {
-      await settleAdmissionGrant()
-      expect(_gitAdmissionSnapshotForTests().queued).toBe(1)
-      await vi.advanceTimersByTimeAsync(2500)
-      await rejection
-      expect(execFileMock).not.toHaveBeenCalled()
-      expect(spawnMock).not.toHaveBeenCalled()
-      expect(_gitAdmissionSnapshotForTests().queued).toBe(0)
-    } finally {
-      blocker.release()
-    }
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    await settleAdmissionGrant()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(_gitAdmissionSnapshotForTests().queued).toBe(1)
+    expect(execFileMock).not.toHaveBeenCalled()
+    controller.abort()
+    await rejection
+    blocker.release()
+    expect(_gitAdmissionSnapshotForTests().queued).toBe(0)
   })
 
   it('retains the string-exec permit after timeout settlement until close', async () => {
@@ -238,37 +231,37 @@ describe('git exec admission lifetime', () => {
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
   })
 
-  it('fails a queued command on its own timeout without ever spawning it', async () => {
-    vi.useRealTimers()
-    _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
-    const blocker = mockChild()
-    let finishBlocker: ExecCallback | undefined
-    execFileMock.mockImplementation(
-      (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-        finishBlocker = callback
-        return blocker
-      }
-    )
-    const holding = gitExecFileAsync(['status'], { cwd: '/repo' })
-    await vi.waitFor(() => expect(finishBlocker).toBeTypeOf('function'))
-
-    const startedAt = Date.now()
-    await expect(gitExecFileAsync(['status'], { cwd: '/repo', timeout: 50 })).rejects.toMatchObject(
-      { name: 'GitCommandTimeoutError', timeoutMs: 50 }
-    )
-    expect(Date.now() - startedAt).toBeLessThan(1_000)
-    // The queue wait is the whole failure: the blocked command never reached a child.
-    expect(execFileMock).toHaveBeenCalledOnce()
-    expect(_gitAdmissionSnapshotForTests()).toMatchObject({
-      queued: 0,
-      budgets: { general: { baseUsed: 1, headroomUsed: 0 } }
-    })
-
-    finishBlocker?.(null, '', '')
-    blocker.emit('close', 0, null)
-    await expect(holding).resolves.toEqual({ stdout: '', stderr: '' })
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
-  })
+  it.each([false, true])(
+    'waits beyond the execution timeout before spawning (buffer: %s)',
+    async (buffer) => {
+      _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
+      const holding = acquireGitAdmission({ args: ['status'], cwd: '/repo' })
+      await settleAdmissionGrant()
+      const blocker = await holding
+      const child = mockChild()
+      let callback: ExecCallback | undefined
+      execFileMock.mockImplementation((_command, _args, _options, received: ExecCallback) => {
+        callback = received
+        return child
+      })
+      const pending = buffer
+        ? gitExecFileAsyncBuffer(['status'], { cwd: '/repo', timeout: 50 })
+        : gitExecFileAsync(['status'], { cwd: '/repo', timeout: 50 })
+      await settleAdmissionGrant()
+      await vi.advanceTimersByTimeAsync(500)
+      expect(execFileMock).not.toHaveBeenCalled()
+      expect(_gitAdmissionSnapshotForTests().queued).toBe(1)
+      blocker.release()
+      await settleAdmissionGrant()
+      expect(execFileMock).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(49)
+      callback?.(null, buffer ? Buffer.from('ok') : 'ok', buffer ? Buffer.alloc(0) : '')
+      child.emit('close', 0, null)
+      expect((await pending).stdout.toString()).toBe('ok')
+      expect(_gitAdmissionSnapshotForTests().queued).toBe(0)
+      expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
+    }
+  )
 
   it('still reports a caller abort of a queued command as an abort', async () => {
     vi.useRealTimers()

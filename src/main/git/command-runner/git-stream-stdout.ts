@@ -97,8 +97,7 @@ export async function gitStreamStdout(
       cwd: options.cwd,
       wslDistro: options.wslDistro,
       tier: options.admissionTier,
-      signal: options.signal,
-      timeoutMs
+      signal: options.signal
     })
     span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
     const terminationState: { current: Promise<void> | null } = { current: null }

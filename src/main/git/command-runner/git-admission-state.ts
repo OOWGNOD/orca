@@ -20,7 +20,6 @@ export type GitAdmissionRequest = {
   wslDistro?: string
   tier?: GitAdmissionTier
   signal?: AbortSignal
-  timeoutMs?: number
 }
 
 export type GitAdmissionGrant = {

@@ -3,7 +3,6 @@ import type { GitAdmissionTier } from './git-exec-options'
 
 type GitOperationPolicy = {
   admissionTier: GitAdmissionTier
-  queueTimeoutMs: number
 }
 
 const operations = new AsyncLocalStorage<{ policy: GitOperationPolicy; active: boolean }>()

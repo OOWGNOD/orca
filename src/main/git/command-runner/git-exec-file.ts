@@ -71,8 +71,7 @@ async function gitExecFileAsyncUnlocked(
         cwd: options.cwd,
         wslDistro: options.wslDistro,
         tier: options.admissionTier,
-        signal: options.signal,
-        timeoutMs
+        signal: options.signal
       })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
       const terminationState: { current: Promise<void> | null } = { current: null }
@@ -217,8 +216,7 @@ export async function gitExecFileAsyncBuffer(
       args,
       cwd: options.cwd,
       wslDistro: options.wslDistro,
-      tier: options.admissionTier,
-      timeoutMs
+      tier: options.admissionTier
     })
     span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
     let termination: Promise<void> | null = null

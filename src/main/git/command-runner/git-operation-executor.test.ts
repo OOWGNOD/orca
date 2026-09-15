@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createGitOperationExecutor, resolveGitAdmissionTier } from './git-operation-executor'
+import { resolveGitAdmissionTier } from './git-operation-executor'
 import {
   acquireGitAdmission,
   GitAdmissionScheduler,
@@ -70,30 +70,5 @@ describe('Git operation execution policy', () => {
       grant.release()
     }
     expect(_gitAdmissionSnapshotForTests().queued).toBe(0)
-  })
-
-  it('bounds otherwise untimed mutation admission and removes the expired waiter', async () => {
-    _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
-    const blocker = await acquireGitAdmission({ args: ['status'], cwd: '/repo' })
-    const executor = createGitOperationExecutor({
-      admissionTier: 'interactive',
-      queueTimeoutMs: 20
-    })
-    try {
-      await expect(
-        executor.run(() =>
-          acquireGitAdmission({
-            args: ['checkout', 'main'],
-            cwd: '/repo'
-          })
-        )
-      ).rejects.toMatchObject({ name: 'GitCommandTimeoutError', timeoutMs: 20 })
-      expect(_gitAdmissionSnapshotForTests()).toMatchObject({
-        queued: 0,
-        budgets: { general: { baseUsed: 1, headroomUsed: 0 } }
-      })
-    } finally {
-      blocker.release()
-    }
   })
 })
