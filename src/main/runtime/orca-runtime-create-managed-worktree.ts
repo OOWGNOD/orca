@@ -142,24 +142,31 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
           : {})
       }
     }
-    const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
-      await createRuntimeLocalManagedWorktree({
-        request: args,
-        repo,
-        store: this.requireStore(),
-        createdWithAgent: effectiveCreatedWithAgent,
-        hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
-        resolveRemoteTrackingBase: (path, base, ...options) =>
-          this.resolveRemoteTrackingBase(path, base, ...options),
-        hasRemoteTrackingRef: (path, base, ...options) =>
-          this.hasRemoteTrackingRef(path, base, ...options),
-        refreshRemoteTrackingBase: (path, base, ...options) =>
-          this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
-        fetchRemote: (path, remote, ...options) =>
-          this.fetchRemoteWithCache(path, remote, ...options),
-        onWorktreeMetadataPersisted: (persistedWorktree) =>
-          this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
-      })
+    const {
+      worktree,
+      worktreePath,
+      includeCopyWarning,
+      created,
+      addResult,
+      metadataResult,
+      rearmPreparation
+    } = await createRuntimeLocalManagedWorktree({
+      request: args,
+      repo,
+      store: this.requireStore(),
+      createdWithAgent: effectiveCreatedWithAgent,
+      hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
+      resolveRemoteTrackingBase: (path, base, ...options) =>
+        this.resolveRemoteTrackingBase(path, base, ...options),
+      hasRemoteTrackingRef: (path, base, ...options) =>
+        this.hasRemoteTrackingRef(path, base, ...options),
+      refreshRemoteTrackingBase: (path, base, ...options) =>
+        this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
+      fetchRemote: (path, remote, ...options) =>
+        this.fetchRemoteWithCache(path, remote, ...options),
+      onWorktreeMetadataPersisted: (persistedWorktree) =>
+        this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
+    })
     const settings = createSettings
     const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
 
@@ -240,6 +247,9 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       path: worktree.path,
       branch: worktree.branch
     })
+    // Why last: re-arming the prepared-checkout pool is a full `reset --hard` that would
+    // otherwise hold a git admission slot while this create still has terminals to launch.
+    rearmPreparation()
     return {
       worktree: {
         ...worktree,

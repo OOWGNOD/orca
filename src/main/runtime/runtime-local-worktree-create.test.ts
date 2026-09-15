@@ -136,7 +136,7 @@ beforeEach(() => {
 })
 
 describe('runtime prepared-worktree replenishment', () => {
-  it('waits for materialization probes and include copies before starting another checkout', async () => {
+  it('hands the caller an unfired re-arm once materialization probes and include copies finish', async () => {
     let finishProbe!: (paths: string[]) => void
     mocks.resolveShared.mockImplementation(
       () =>
@@ -158,7 +158,10 @@ describe('runtime prepared-worktree replenishment', () => {
     await vi.waitFor(() => expect(mocks.copyPaths).toHaveBeenCalledOnce())
     expect(mocks.rearm).not.toHaveBeenCalled()
     finishCopy([])
-    await creation
+    const result = await creation
+    // The caller launches terminals before arming, so create must not fire it itself.
+    expect(mocks.rearm).not.toHaveBeenCalled()
+    result.rearmPreparation()
     expect(mocks.rearm).toHaveBeenCalledOnce()
   })
 

@@ -135,11 +135,12 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
     localWorktreeGitOptions: worktreeGitOptions,
     onMetadataPersisted: args.onWorktreeMetadataPersisted
   })
-  git.rearmPreparation()
   return {
     ...materialized,
     worktreePath: candidate.worktreePath,
     created: git.created,
-    addResult: git.addResult
+    addResult: git.addResult,
+    // Re-arming is a full `reset --hard`; the caller still has terminals to launch.
+    rearmPreparation: git.rearmPreparation
   }
 }
