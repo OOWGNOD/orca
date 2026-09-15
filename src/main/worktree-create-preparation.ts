@@ -49,7 +49,7 @@ export type PreparedWorktreeCreateAttempt =
       status: 'hit'
       retargeted: boolean
       result: AddWorktreeResult
-      /** Run once the create has returned to the renderer; see {@link deferRearmPreparation}. */
+      /** Run after materialization/startup completes, before returning the create result. */
       rearm: () => void
     }
   | { status: 'miss'; reason: PreparedCheckoutMissReason }
@@ -204,7 +204,7 @@ async function claimPreparedWorktree(
  *
  *  Returns a thunk rather than launching: the replacement is a full `reset --hard`, which on a
  *  large repo holds a general admission slot for tens of seconds. Started mid-create it competes
- *  with the create's own git, so the caller runs it only once the create has returned. The burst
+ *  with the create's own git, so the caller runs it after materialization/startup completes. The burst
  *  bookkeeping still happens here — a prefetch that re-armed this key while we finalized would
  *  otherwise swallow the consume, and the next create would look isolated when it is really the
  *  middle of a burst. */
