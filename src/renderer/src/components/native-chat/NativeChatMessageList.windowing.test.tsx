@@ -16,23 +16,22 @@ import {
   NATIVE_CHAT_FOLLOW_REARM_PX
 } from './native-chat-autoscroll'
 import { NATIVE_CHAT_ROW_GAP_PX } from './native-chat-row-height-estimate'
-
 import {
-  VIEWPORT_PX,
-  TRANSCRIPT_LENGTH,
   BELOW_TRANSCRIPT_PX,
-  ROW_PX,
-  ROW_PITCH_PX,
+  deliverResizes,
+  layout,
+  list,
   marker,
+  ROW_PITCH_PX,
+  ROW_PX,
+  scrollTranscript,
+  session,
   stubLayout,
   stubResizeObserver,
-  deliverResizes,
-  session,
-  list,
-  windowState,
-  scrollTranscript,
-  transcriptLayout
-} from './native-chat-windowing-fixture'
+  TRANSCRIPT_LENGTH,
+  VIEWPORT_PX,
+  windowState
+} from './native-chat-windowing-test-harness'
 
 afterEach(cleanup)
 
@@ -452,7 +451,7 @@ describe('transcript follow ownership across growth and appends', () => {
   function setMeasuredTail(step: number): void {
     const heights = Array.from({ length: TRANSCRIPT_LENGTH }, () => ROW_PX)
     heights[TAIL_INDEX] = tailHeightAt(step)
-    transcriptLayout.measuredRowHeights = heights
+    layout.measuredRowHeights = heights
   }
 
   let restoreLayout = (): void => {}
@@ -460,16 +459,16 @@ describe('transcript follow ownership across growth and appends', () => {
   beforeEach(() => {
     restoreLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
     restoreResizeObserver = stubResizeObserver()
-    transcriptLayout.belowTranscriptPx = BELOW_TRANSCRIPT_PX
-    transcriptLayout.aboveTranscriptPx = 0
+    layout.belowTranscriptPx = BELOW_TRANSCRIPT_PX
+    layout.aboveTranscriptPx = 0
     setMeasuredTail(0)
   })
   afterEach(() => {
     restoreResizeObserver()
     restoreLayout()
-    transcriptLayout.measuredRowHeights = []
-    transcriptLayout.belowTranscriptPx = BELOW_TRANSCRIPT_PX
-    transcriptLayout.aboveTranscriptPx = 0
+    layout.measuredRowHeights = []
+    layout.belowTranscriptPx = BELOW_TRANSCRIPT_PX
+    layout.aboveTranscriptPx = 0
     vi.restoreAllMocks()
   })
 
@@ -541,8 +540,8 @@ describe('transcript follow ownership across growth and appends', () => {
     'keeps a reader parked above a growing row with a %i px initial measurement delta',
     (measurementDelta) => {
       setMeasuredTail(4)
-      transcriptLayout.measuredRowHeights = transcriptLayout.measuredRowHeights.map(
-        (height, index) => (index === TAIL_INDEX ? height + measurementDelta : height)
+      layout.measuredRowHeights = layout.measuredRowHeights.map((height, index) =>
+        index === TAIL_INDEX ? height + measurementDelta : height
       )
       const { container, rerender } = render(streamingList(4))
       paint(container)
@@ -693,7 +692,7 @@ describe('transcript follow ownership across growth and appends', () => {
     const aboveIndex = windowState(container).indexes[0]!
     expect((aboveIndex + 1) * ROW_PITCH_PX).toBeLessThan(readingAt)
     for (const growth of [100, 200]) {
-      transcriptLayout.measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
+      layout.measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
         index === aboveIndex ? ROW_PX + growth : ROW_PX
       )
       paint(container)
@@ -714,7 +713,7 @@ describe('transcript follow ownership across growth and appends', () => {
     setMeasuredTail(1)
     expect(deliverResizes()).toBe(true)
     const pinnedAt = scroller.scrollTop
-    transcriptLayout.belowTranscriptPx += 2_000
+    layout.belowTranscriptPx += 2_000
 
     fireEvent.scroll(scroller)
 
@@ -731,7 +730,7 @@ describe('transcript follow ownership across growth and appends', () => {
     paint(container)
     scrollTranscript(container, readingAt + 100)
     paint(container)
-    transcriptLayout.measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
+    layout.measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
       index === aboveIndex ? ROW_PX + 10 : ROW_PX
     )
     paint(container)
@@ -740,8 +739,8 @@ describe('transcript follow ownership across growth and appends', () => {
     const scroller = scrollRoot(container)
     const scrollTo = vi.spyOn(scroller, 'scrollTo')
 
-    transcriptLayout.measuredRowHeights = transcriptLayout.measuredRowHeights.map(
-      (height, index) => (index === aboveIndex ? height + 20 : height)
+    layout.measuredRowHeights = layout.measuredRowHeights.map((height, index) =>
+      index === aboveIndex ? height + 20 : height
     )
     paint(container)
 
@@ -755,7 +754,7 @@ describe('transcript follow ownership across growth and appends', () => {
     paint(container)
     scrollTranscript(container, focusedIndex * ROW_PITCH_PX)
     paint(container)
-    transcriptLayout.measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
+    layout.measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
       index === focusedIndex ? 100 : ROW_PX
     )
     paint(container)
@@ -765,8 +764,8 @@ describe('transcript follow ownership across growth and appends', () => {
     const scroller = scrollRoot(container)
     const scrollTo = vi.spyOn(scroller, 'scrollTo')
 
-    transcriptLayout.measuredRowHeights = transcriptLayout.measuredRowHeights.map(
-      (height, index) => (index === focusedIndex ? 30 : height)
+    layout.measuredRowHeights = layout.measuredRowHeights.map((height, index) =>
+      index === focusedIndex ? 30 : height
     )
     paint(container)
 
@@ -824,11 +823,11 @@ describe('transcript follow ownership across growth and appends', () => {
     function setSkewedTail(step: number, skew = MEASURE_SKEW_PX): void {
       const heights = Array.from({ length: TRANSCRIPT_LENGTH }, () => ROW_PX)
       heights[TAIL_INDEX] = tailHeightAt(step) + skew
-      transcriptLayout.measuredRowHeights = heights
+      layout.measuredRowHeights = heights
     }
 
     beforeEach(() => {
-      transcriptLayout.aboveTranscriptPx = GUTTER_PX
+      layout.aboveTranscriptPx = GUTTER_PX
     })
 
     it.each([0, MEASURE_SKEW_PX])(
