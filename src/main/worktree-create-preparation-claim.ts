@@ -9,6 +9,7 @@ export type PreparationSelectionMissReason = Extract<
   PreparedCheckoutMissReason,
   | 'none_armed'
   | 'repo_mismatch'
+  | 'not_ready'
   | 'base_mismatch'
   | 'workspace_root_mismatch'
   | 'wsl_distro_mismatch'
@@ -23,6 +24,8 @@ export type PreparationCandidate = {
   /** That base after `resolveWorktreeAddBaseRef`, so `main` and `refs/heads/main` compare equal. */
   canonicalBase: string
   createdAt: number
+  /** False until the prepared checkout has finished. */
+  checkoutFinished: boolean
 }
 
 export type PreparationRequest = {
@@ -83,10 +86,13 @@ export function selectPreparationForCreate<T extends PreparationCandidate>(
   candidates: readonly T[],
   request: PreparationRequest
 ): PreparationSelection<T> {
-  if (candidates.length === 0) {
-    return { kind: 'miss', reason: 'none_armed' }
+  // An unfinished preparation is left armed rather than claimed: its checkout runs at `background`,
+  // so awaiting it would park this interactive create behind every arriving status poller.
+  const finished = candidates.filter((candidate) => candidate.checkoutFinished)
+  if (finished.length === 0) {
+    return { kind: 'miss', reason: candidates.length === 0 ? 'none_armed' : 'not_ready' }
   }
-  const sameRepo = candidates.filter((candidate) => candidate.repoPathKey === request.repoPathKey)
+  const sameRepo = finished.filter((candidate) => candidate.repoPathKey === request.repoPathKey)
   if (sameRepo.length === 0) {
     // Separate from `none_armed`: this is what a size-cap eviction looks like from the create side.
     return { kind: 'miss', reason: 'repo_mismatch' }

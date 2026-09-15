@@ -1,17 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { GitAdmissionTier } from './git-exec-options'
 
-type GitOperationPolicy = {
-  admissionTier: GitAdmissionTier
-}
+const operations = new AsyncLocalStorage<{ tier: GitAdmissionTier; active: boolean }>()
 
-const operations = new AsyncLocalStorage<{ policy: GitOperationPolicy; active: boolean }>()
-
-/** Async context keeps concurrent operations isolated without forwarding policy through routing options. */
-export function createGitOperationExecutor(policy: GitOperationPolicy) {
+/** Async context keeps concurrent operations isolated without forwarding a tier through routing options. */
+export function createGitOperationExecutor(tier: GitAdmissionTier) {
   return {
     async run<T>(operation: () => Promise<T>): Promise<T> {
-      const scope = { policy, active: true }
+      const scope = { tier, active: true }
       return operations.run(scope, async () => {
         try {
           return await operation()
@@ -24,11 +20,7 @@ export function createGitOperationExecutor(policy: GitOperationPolicy) {
   }
 }
 
-export function currentGitOperationPolicy(): Readonly<GitOperationPolicy> | undefined {
-  const scope = operations.getStore()
-  return scope?.active ? scope.policy : undefined
-}
-
 export function resolveGitAdmissionTier(tier?: GitAdmissionTier): GitAdmissionTier {
-  return tier ?? currentGitOperationPolicy()?.admissionTier ?? 'status'
+  const scope = operations.getStore()
+  return tier ?? (scope?.active ? scope.tier : undefined) ?? 'status'
 }

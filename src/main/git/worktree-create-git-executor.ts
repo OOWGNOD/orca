@@ -1,9 +1,5 @@
 import { createGitOperationExecutor } from './command-runner/git-operation-executor'
 
-export const worktreeCreateGit = createGitOperationExecutor({
-  admissionTier: 'interactive'
-})
+export const worktreeCreateGit = createGitOperationExecutor('interactive')
 
-export const worktreePreparationGit = createGitOperationExecutor({
-  admissionTier: 'background'
-})
+export const worktreePreparationGit = createGitOperationExecutor('background')
