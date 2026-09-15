@@ -1,4 +1,3 @@
-import { GitCommandTimeoutError } from './command-runner/git-command-timeout'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { extractExecError, ghExecFileAsync, gitExecFileAsync } from './runner'
 import { parseHostedRemote } from './hosted-remote-url'
@@ -321,22 +320,15 @@ export async function resolveLocalGitUsernameDetailed(
       if (username) {
         return { username, authoritative: true }
       }
-    } catch (error) {
-      if (error instanceof GitCommandTimeoutError) {
-        return { username: '', authoritative: false }
-      }
+    } catch {
       // Missing config keys are expected; try the next explicit username key.
     }
   }
-  try {
-    if (await localRepoHasEffectiveGitHubRemote(repoPath)) {
-      const outcome = await getGhLoginOutcome()
-      return { username: outcome.login, authoritative: !outcome.timedOut }
-    }
-    return { username: '', authoritative: true }
-  } catch {
-    return { username: '', authoritative: false }
+  if (await localRepoHasEffectiveGitHubRemote(repoPath)) {
+    const outcome = await getGhLoginOutcome()
+    return { username: outcome.login, authoritative: !outcome.timedOut }
   }
+  return { username: '', authoritative: true }
 }
 
 export async function resolveLocalGitUsername(repoPath: string): Promise<string> {

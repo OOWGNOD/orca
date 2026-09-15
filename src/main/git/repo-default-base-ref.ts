@@ -1,5 +1,4 @@
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
-import { GitCommandTimeoutError } from './command-runner/git-command-timeout'
 import { gitExecFileAsync, gitExecFileSync } from './runner'
 
 export type LocalGitExecOptions = {
@@ -91,20 +90,11 @@ export async function getBaseRefDefault(
 
 export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
 
-/** A timed-out probe never read the ref store, so folding it into "absent" would report a repo
- *  with `origin/main` as having no default base. Let it fail with its real cause instead. */
-function rethrowGitCommandTimeout(error: unknown): void {
-  if (error instanceof GitCommandTimeoutError) {
-    throw error
-  }
-}
-
 async function hasGitRefViaExec(exec: GitExec, ref: string): Promise<boolean> {
   try {
     await exec(['rev-parse', '--verify', '--quiet', ref])
     return true
-  } catch (error) {
-    rethrowGitCommandTimeout(error)
+  } catch {
     return false
   }
 }
@@ -117,8 +107,7 @@ async function resolveVerifiedOriginHeadBaseRefViaExec(exec: GitExec): Promise<s
       return null
     }
     return gitRefToDefaultBaseRef(ref)
-  } catch (error) {
-    rethrowGitCommandTimeout(error)
+  } catch {
     return null
   }
 }

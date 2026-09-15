@@ -1,5 +1,4 @@
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
-import { GitCommandTimeoutError } from './command-runner/git-command-timeout'
 import { gitExecFileAsync } from './runner'
 import { isShowRefNoMatchError } from './exact-ref-probe'
 import { hasCommitObjectViaGitExec } from './commit-object-ref'
@@ -7,7 +6,6 @@ import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 
 type GitExecOptions = {
-  signal?: AbortSignal
   wslDistro?: string
   admissionTier?: GitAdmissionTier
 }
@@ -27,18 +25,13 @@ export async function resolveWorktreeBaseCommitOid(
     const { stdout } = await gitExecFileAsync(
       ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
       {
-        ...options,
-        cwd: repoPath
+        cwd: repoPath,
+        ...options
       }
     )
     const oid = stdout.trim()
     return oid.length > 0 ? oid : null
-  } catch (error) {
-    options.signal?.throwIfAborted()
-    // A timed-out probe is not evidence that the ref is absent.
-    if (error instanceof GitCommandTimeoutError) {
-      throw error
-    }
+  } catch {
     return null
   }
 }
@@ -89,7 +82,7 @@ export async function hasLocalWorktreeBaseRef(
     return refExists(baseRef)
   }
   return hasCommitObjectViaGitExec(
-    (gitArgs) => gitExecFileAsync(gitArgs, { ...options, cwd: repoPath }),
+    (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...options }),
     baseRef
   )
 }

@@ -71,8 +71,7 @@ function canonicalBaseRef(
 ): Promise<string> {
   return resolveLocalWorktreeBaseRef(repoPath, baseBranch, {
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
-    ...(options.signal ? { signal: options.signal } : {})
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
   })
 }
 
@@ -131,7 +130,6 @@ async function claimPreparedWorktree(
   args: ConsumePreparedWorktreeArgs,
   options: AddWorktreeOptions
 ): Promise<ClaimedPreparation> {
-  options.signal?.throwIfAborted()
   const request = {
     repoPathKey: preparationPathKey(args.repoPath),
     workspaceRootKey: preparationPathKey(args.workspaceRoot),
@@ -145,13 +143,7 @@ async function claimPreparedWorktree(
   if (selection.kind === 'needs-canonical-base') {
     // The probe is the only await here, and the pool is re-read after it, so the select-and-take
     // below stays one synchronous run and no other create can hold the same entry.
-    let canonicalBase: string
-    try {
-      canonicalBase = await canonicalBaseRef(args.repoPath, args.baseBranch, options)
-    } catch {
-      options.signal?.throwIfAborted()
-      return { status: 'miss', reason: 'prepare_failed' }
-    }
+    const canonicalBase = await canonicalBaseRef(args.repoPath, args.baseBranch, options)
     selection = selectPreparationForCreate(listPreparations(), { ...request, canonicalBase })
   }
   if (selection.kind !== 'exact' && selection.kind !== 'retarget') {

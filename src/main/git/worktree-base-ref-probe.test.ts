@@ -4,7 +4,6 @@ const gitExecFileAsync = vi.hoisted(() => vi.fn())
 
 vi.mock('./runner', () => ({ gitExecFileAsync }))
 
-import { GitCommandTimeoutError } from './command-runner/git-command-timeout'
 import { hasLocalWorktreeBaseRef, probeWorktreeBaseRefPresence } from './worktree-base-ref-probe'
 
 describe('probeWorktreeBaseRefPresence', () => {
@@ -73,21 +72,6 @@ describe('hasLocalWorktreeBaseRef', () => {
     gitExecFileAsync.mockReset()
   })
 
-  it('stops base discovery when the caller cancels the Git probe', async () => {
-    const controller = new AbortController()
-    gitExecFileAsync.mockImplementationOnce(async (_args, options) => {
-      expect(options.signal).toBe(controller.signal)
-      controller.abort()
-      options.signal.throwIfAborted()
-    })
-    await expect(
-      hasLocalWorktreeBaseRef(repoPath, 'origin/main', {
-        signal: controller.signal
-      })
-    ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(gitExecFileAsync).toHaveBeenCalledOnce()
-  })
-
   it('prefers the remote namespace for a slashed short name', async () => {
     resolveOnly(['refs/remotes/origin/main'])
 
@@ -96,16 +80,6 @@ describe('hasLocalWorktreeBaseRef', () => {
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
       { cwd: repoPath }
     )
-  })
-
-  // A timed-out probe is not evidence that a ref is missing.
-  it('fails rather than reporting an absent base when the probe times out', async () => {
-    gitExecFileAsync.mockRejectedValue(new GitCommandTimeoutError(120_000))
-
-    await expect(hasLocalWorktreeBaseRef(repoPath, 'origin/main')).rejects.toMatchObject({
-      name: 'GitCommandTimeoutError',
-      timeoutMs: 120_000
-    })
   })
 
   it('probes a bare commit id as an object, not as a ref', async () => {
@@ -118,20 +92,6 @@ describe('hasLocalWorktreeBaseRef', () => {
     expect(gitExecFileAsync).toHaveBeenCalledWith(
       ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
       { cwd: repoPath, wslDistro: 'Ubuntu' }
-    )
-  })
-
-  it('preserves a timeout after a SHA has no matching branch name', async () => {
-    const sha = 'a'.repeat(40)
-    const timeout = new GitCommandTimeoutError(120_000)
-    gitExecFileAsync
-      .mockRejectedValueOnce(new Error('no matching branch'))
-      .mockRejectedValueOnce(timeout)
-
-    await expect(hasLocalWorktreeBaseRef(repoPath, sha)).rejects.toBe(timeout)
-    expect(gitExecFileAsync).toHaveBeenLastCalledWith(
-      ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
-      { cwd: repoPath }
     )
   })
 

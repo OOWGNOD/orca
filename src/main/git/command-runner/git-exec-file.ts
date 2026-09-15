@@ -65,7 +65,6 @@ async function gitExecFileAsyncUnlocked(
       const policy = effectiveOptions.useConfiguredSshCommandForNetwork
         ? await buildNetworkSshPolicyEnv(effectiveOptions)
         : { env: nonInteractiveGitEnv(effectiveOptions.env), mode: 'default' as const }
-      const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
       const grant = await acquireGitAdmission({
         args,
         cwd: options.cwd,
@@ -74,6 +73,7 @@ async function gitExecFileAsyncUnlocked(
         signal: options.signal
       })
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
+      const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
       const terminationState: { current: Promise<void> | null } = { current: null }
       const capture = (
         command: ResolvedCommand
@@ -211,7 +211,6 @@ export async function gitExecFileAsyncBuffer(
       await environmentReady
     }
     resolved = resolveGitCommand(args, options, false, true)
-    const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
     const grant = await acquireGitAdmission({
       args,
       cwd: options.cwd,
@@ -219,6 +218,7 @@ export async function gitExecFileAsyncBuffer(
       tier: options.admissionTier
     })
     span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
+    const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
     let termination: Promise<void> | null = null
     try {
       let reportTerminated: () => void = () => {}
