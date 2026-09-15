@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from '@testing-library/react'
+import { act, render, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runCleanupMock, snapshotMock, toastErrorMock, toastInfoMock, toastSuccessMock } =
@@ -30,7 +30,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 import type { KillAllTerminalSurfacesSummary } from './kill-all-terminal-surfaces'
-import { useDaemonActions } from './useDaemonActions'
+import { DaemonActionDialog, useDaemonActions } from './useDaemonActions'
 
 function rejectedSummary(): KillAllTerminalSurfacesSummary {
   return {
@@ -148,5 +148,28 @@ describe('useDaemonActions kill-all cleanup', () => {
       expect.any(Object)
     )
     expect(toastInfoMock).not.toHaveBeenCalled()
+  })
+})
+
+// Why: the popover that hosts this confirm sits at z-60 (see ui/popover.tsx).
+const POPOVER_Z_INDEX = 60
+
+function zIndexOf(element: Element | null): number {
+  const match = /z-\[(\d+)\]/.exec(element?.className ?? '')
+  return match ? Number(match[1]) : Number.NaN
+}
+
+describe('DaemonActionDialog stacking', () => {
+  it('paints above the resource-manager popover that opened it', () => {
+    const { result } = renderHook(() => useDaemonActions())
+    act(() => result.current.setPending('restart'))
+    render(<DaemonActionDialog api={result.current} />)
+
+    expect(zIndexOf(document.querySelector('[data-slot="dialog-overlay"]'))).toBeGreaterThan(
+      POPOVER_Z_INDEX
+    )
+    expect(zIndexOf(document.querySelector('[data-slot="dialog-content"]'))).toBeGreaterThan(
+      POPOVER_Z_INDEX
+    )
   })
 })
