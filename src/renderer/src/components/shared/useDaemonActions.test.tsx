@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { act, render, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, render, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runCleanupMock, snapshotMock, toastErrorMock, toastInfoMock, toastSuccessMock } =
   vi.hoisted(() => ({
@@ -30,6 +30,8 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 import type { KillAllTerminalSurfacesSummary } from './kill-all-terminal-surfaces'
+import type { UnifiedSessionRow } from '@/components/status-bar/resource-usage-merge-types'
+import { renderResourceUsageKillDialog } from '@/components/status-bar/resource-usage-kill-dialog'
 import { DaemonActionDialog, useDaemonActions } from './useDaemonActions'
 
 function rejectedSummary(): KillAllTerminalSurfacesSummary {
@@ -61,6 +63,21 @@ function successfulSurfaceSummary(): KillAllTerminalSurfacesSummary {
     closeYieldCount: 0,
     closePhaseExceededLongTaskBudget: false,
     daemon: { status: 'fulfilled', killedCount: 0, remainingCount: 0 }
+  }
+}
+
+function killConfirmRow(): UnifiedSessionRow {
+  return {
+    sessionId: 'session-1',
+    paneKey: null,
+    pid: 4242,
+    label: 'Terminal 1',
+    bound: true,
+    agentOwnership: 'absent',
+    tabId: null,
+    cpu: 1,
+    memory: 1,
+    hasLocalSamples: true
   }
 }
 
@@ -151,7 +168,7 @@ describe('useDaemonActions kill-all cleanup', () => {
   })
 })
 
-// Why: the popover that hosts this confirm sits at z-60 (see ui/popover.tsx).
+// Why: the popover that hosts these confirms sits at z-60 (see ui/popover.tsx).
 const POPOVER_Z_INDEX = 60
 
 function zIndexOf(element: Element | null): number {
@@ -159,17 +176,40 @@ function zIndexOf(element: Element | null): number {
   return match ? Number(match[1]) : Number.NaN
 }
 
-describe('DaemonActionDialog stacking', () => {
-  it('paints above the resource-manager popover that opened it', () => {
+function expectRenderedDialogAbovePopover(): void {
+  expect(zIndexOf(document.querySelector('[data-slot="dialog-overlay"]'))).toBeGreaterThan(
+    POPOVER_Z_INDEX
+  )
+  expect(zIndexOf(document.querySelector('[data-slot="dialog-content"]'))).toBeGreaterThan(
+    POPOVER_Z_INDEX
+  )
+}
+
+// Why: no global RTL cleanup is configured, so portaled dialogs would otherwise
+// stack up in the document and the queries above would hit the first render.
+describe('resource-manager confirm stacking', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('paints the daemon confirm above the popover that opened it', () => {
     const { result } = renderHook(() => useDaemonActions())
     act(() => result.current.setPending('restart'))
     render(<DaemonActionDialog api={result.current} />)
 
-    expect(zIndexOf(document.querySelector('[data-slot="dialog-overlay"]'))).toBeGreaterThan(
-      POPOVER_Z_INDEX
+    expectRenderedDialogAbovePopover()
+  })
+
+  it('paints the kill-session confirm above the popover that opened it', () => {
+    render(
+      renderResourceUsageKillDialog({
+        killConfirm: killConfirmRow(),
+        setKillConfirm: vi.fn(),
+        killing: false,
+        runKillConfirmed: vi.fn()
+      })
     )
-    expect(zIndexOf(document.querySelector('[data-slot="dialog-content"]'))).toBeGreaterThan(
-      POPOVER_Z_INDEX
-    )
+
+    expectRenderedDialogAbovePopover()
   })
 })
